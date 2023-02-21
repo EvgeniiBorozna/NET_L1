@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 9.0.1, 2023-02-21T14:30:30. -->
+<!-- Written by QtCreator 9.0.1, 2023-02-21T16:40:07. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -381,6 +381,7 @@
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">NET_L1</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.NET_L1</value>
     <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">NET_L1</value>
+    <value type="QString" key="RunConfiguration.Arguments">1234</value>
     <value type="bool" key="RunConfiguration.UseCppDebugger">false</value>
     <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
     <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>

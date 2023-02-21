@@ -6,9 +6,8 @@
 #include <string>
 #include <thread>
 
-#include <socket_wrapper/socket_headers.h>
-#include <socket_wrapper/socket_wrapper.h>
-
+#include "socket_headers.h"
+#include "socket_wrapper.h"
 
 int print_ips_with_getaddrinfo(const std::string &host_name)
 {

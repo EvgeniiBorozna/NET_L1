@@ -1,155 +1,120 @@
-#include <cassert>
-#include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <string>
-#include <thread>
 
 #include "socket_headers.h"
 #include "socket_wrapper.h"
+#include "socket_class.h"
 
-int print_ips_with_getaddrinfo(const std::string &host_name)
+// Trim from end (in place).
+static inline std::string& rtrim(std::string& s)
 {
-    // Need for Windows initialization.
-    socket_wrapper::SocketWrapper sock_wrap;
-
-    std::cout
-        << "Getting name for \"" << host_name << "\"...\n"
-        << "Using getaddrinfo() function." << std::endl;
-
-    addrinfo hints =
-    {
-        .ai_flags= AI_CANONNAME,
-        // Неважно, IPv4 или IPv6.
-        .ai_family = AF_UNSPEC,
-        // TCP stream-sockets.
-        .ai_socktype = SOCK_STREAM,
-        // Any protocol.
-        .ai_protocol = 0
-    };
-
-    // Results.
-    addrinfo *servinfo = nullptr;
-    int status = 0;
-
-    if ((status = getaddrinfo(host_name.c_str(), nullptr, &hints, &servinfo)) != 0)
-    {
-        std::cerr << "getaddrinfo error: " << gai_strerror(status) << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    for (auto const *s = servinfo; s != nullptr; s = s->ai_next)
-    {
-        std::cout << "Canonical name: ";
-        if (s->ai_canonname)
-             std::cout << s->ai_canonname;
-        std::cout << "\n";
-
-        assert(s->ai_family == s->ai_addr->sa_family);
-        std::cout << "Address type: ";
-
-        if (AF_INET == s->ai_family)
-        {
-            char ip[INET_ADDRSTRLEN];
-            std::cout << "AF_INET\n";
-            sockaddr_in const * const sin = reinterpret_cast<const sockaddr_in* const>(s->ai_addr);
-            std::cout << "Address length: " << sizeof(sin->sin_addr) << "\n";
-            std::cout << "IP Address: " << inet_ntop(AF_INET, &(sin->sin_addr), ip, INET_ADDRSTRLEN) << "\n";
-        }
-        else if (AF_INET6 == s->ai_family)
-        {
-            char ip6[INET6_ADDRSTRLEN];
-
-            std::cout << "AF_INET6\n";
-            const sockaddr_in6* const sin = reinterpret_cast<const sockaddr_in6* const>(s->ai_addr);
-            std::cout << "Address length: " << sizeof(sin->sin6_addr) << "\n";
-            std::cout << "IP Address: " << inet_ntop(AF_INET6, &(sin->sin6_addr), ip6, INET6_ADDRSTRLEN) << "\n";
-        }
-        else
-        {
-            std::cout << s->ai_family << "\n";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-
-    freeaddrinfo(servinfo);
-
-    return EXIT_SUCCESS;
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int c) { return !std::isspace(c); }).base(), s.end());
+    return s;
 }
 
-
-int print_ips_with_gethostbyname(const std::string &host_name)
-{
-    std::cout
-        << "Getting name for \"" << host_name << "\"...\n"
-        << "Using gethostbyname() function." << std::endl;
-
-    socket_wrapper::SocketWrapper sock_wrap;
-    const hostent *remote_host { gethostbyname(host_name.c_str()) };
-
-    if (nullptr == remote_host)
-    {
-        if (sock_wrap.get_last_error_code())
-        {
-            std::cerr << sock_wrap.get_last_error_string() << std::endl;
+class Command {
+public:
+    bool isExit(char* _command) {
+        std::string _str;
+        for (int i = 0; i < 256; ++i) {
+            if(&_command[i] == 0) break;
+            _str += &_command[i];
         }
-
-        return EXIT_FAILURE;
+        if(_str.find("exit") != std::string::npos) return true;
+        return false;
     }
+};
 
-    std::cout << "Official name: " << remote_host->h_name << "\n";
-
-    for (const char* const* p_alias = const_cast<const char* const*>(remote_host->h_aliases); *p_alias; ++p_alias)
-    {
-        std::cout << "# Alternate name: \"" <<  *p_alias << "\"\n";
-    }
-
-    std::cout << "Address type: ";
-    if (AF_INET == remote_host->h_addrtype)
-    {
-        std::cout << "AF_INET\n";
-        std::cout << "\nAddress length: " << remote_host->h_length << "\n";
-
-        in_addr addr = {0};
-
-        for (int i = 0; remote_host->h_addr_list[i]; ++i)
-        {
-            addr.s_addr = *reinterpret_cast<const u_long* const>(remote_host->h_addr_list[i]);
-            std::cout << "IP Address: " << inet_ntoa(addr) << "\n";
-        }
-    }
-    else if (AF_INET6 == remote_host->h_addrtype)
-    {
-        std::cout << "AF_INET6\n";
-    }
-    else
-    {
-        std::cout << remote_host->h_addrtype << "\n";
-    }
-
-    std::cout << std::endl;
-
-    return EXIT_SUCCESS;
-}
-
-
-int main(int argc, const char *argv[])
+int main(int argc, char const *argv[])
 {
-
     if (argc != 2)
     {
-        std::cout << "Usage: " << argv[0] << " <hostname>" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <port>" << std::endl;
         return EXIT_FAILURE;
     }
 
-    const std::string host_name = { argv[1] };
+    socket_wrapper::SocketWrapper sock_wrap;
+    const int port { std::stoi(argv[1]) };
 
-    print_ips_with_getaddrinfo(host_name);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    print_ips_with_gethostbyname(host_name);
+    socket_wrapper::Socket sock = {AF_INET, SOCK_DGRAM, IPPROTO_UDP};
 
+    std::cout << "Starting echo server on the port " << port << "...\n";
+
+    if (!sock)
+    {
+        std::cerr << sock_wrap.get_last_error_string() << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    sockaddr_in addr =
+    {
+        .sin_family = PF_INET,
+        .sin_port = htons(port),
+    };
+
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0)
+    {
+        std::cerr << sock_wrap.get_last_error_string() << std::endl;
+        // Socket will be closed in the Socket destructor.
+        return EXIT_FAILURE;
+    }
+
+    char buffer[256];
+
+    // socket address used to store client address
+    struct sockaddr_in client_address = {0};
+    socklen_t client_address_len = sizeof(sockaddr_in);
+    ssize_t recv_len = 0;
+
+    std::cout << "Running echo server...\n" << std::endl;
+    char client_address_buf[INET_ADDRSTRLEN];
+
+    Command cmd;
+
+    while (true)
+    {
+        // Read content into buffer from an incoming client.
+        recv_len = recvfrom(sock, buffer, sizeof(buffer) - 1, 0,
+                            reinterpret_cast<sockaddr *>(&client_address),
+                            &client_address_len);
+
+        if (recv_len > 0)
+        {
+            buffer[recv_len] = '\0';
+            std::cout
+                << "Client with address "
+                << inet_ntop(AF_INET, &client_address.sin_addr, client_address_buf, sizeof(client_address_buf) / sizeof(client_address_buf[0]))
+                << ":" << ntohs(client_address.sin_port)
+                << " sent datagram "
+                << "[length = "
+                << recv_len
+                << "]:\n'''\n"
+                << buffer
+                << "\n'''"
+                << std::endl;
+
+            if (cmd.isExit(&buffer[0])) {
+                std::cout << "exit!!!";
+                return EXIT_SUCCESS;
+            }
+            //send(sock, &buf, readden, 0);
+
+/*            std::string command_string = {buffer, 0, len};
+            rtrim(command_string);
+            std::cout << command_string << std::endl;
+*/
+            // Send same content back to the client ("echo").
+            sendto(sock, buffer, recv_len, 0, reinterpret_cast<const sockaddr *>(&client_address),
+                   client_address_len);
+        }
+
+        std::cout << std::endl;
+    }
     return EXIT_SUCCESS;
 }
 
